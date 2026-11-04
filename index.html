@@ -118,7 +118,7 @@
   <h1>価格改定のお知らせセット</h1>
   <p class="lead">今の価格と新しい価格を入れると、新旧が並んだ価格表の画像・お知らせ文・張り紙が一緒にできます。</p>
   <div class="notice">
-    <p>価格は<strong>税込</strong>で入れてください（お客さま向けの価格は、税込の総額で表示する決まりがあります）。</p>
+    <p>価格は<strong>税込</strong>で入れてください。画像と張り紙には「表示の価格はすべて税込です」と入ります（消費税の総額表示について、くわしくは国税庁の案内をご確認ください）。</p>
     <p>入力した内容は、この端末のブラウザの中だけで扱い、どこにも送信しません。お知らせ文は下書きです。お店に合わせて直してからお使いください。</p>
   </div>
   <div class="layout">
@@ -139,9 +139,9 @@
       <fieldset class="box">
         <legend>理由 <span class="hint">（任意・いくつでも）</span></legend>
         <div id="reasons"></div>
-        <label class="f" for="reasonFree">自分で書く <span class="hint">（30字まで。例: 配送料）</span></label>
+        <label class="f" for="reasonFree">自分で書く <span class="hint">（30字まで。例: 配送料・包装資材）</span></label>
         <input type="text" id="reasonFree" maxlength="60" autocomplete="off">
-        <p class="small">「〇〇の値上がりが続いているため」の〇〇に入ります。選ばなければ、理由は書きません。</p>
+        <p class="small"><strong>「〇〇の値上がりが続いているため」の〇〇に入ります。</strong>値上がりした費用の名前を書いてください。選ばなければ、理由は書きません。</p>
       </fieldset>
       <fieldset class="box">
         <legend>締めのひと言</legend>
@@ -224,7 +224,7 @@ var PC = (function () {
     var n = String(s).normalize('NFKC').toLowerCase(), compact = n.replace(/\s/g, '');
     var dotted = compact.replace(/ドット|どっと|\(dot\)|\[dot\]|dot/g, '.');
     if (/https?|:\/\/|www\.|tel:|mailto:/.test(compact) || RE_DOMAIN.test(n) || RE_DOMAIN.test(dotted)) return 'リンク';
-    if (/@(?!\d)/.test(n)) return 'メールアドレス（@）';
+    if (/[a-z0-9._%+\-]@[a-z0-9\-]/.test(compact)) return 'メールアドレス';
     var runs = n.match(/\d[\d\s().\/_\-ー‐−・、]*\d/g) || [];
     for (var i = 0; i < runs.length; i++) if (runs[i].replace(/\D/g, '').length >= 7) return '7桁以上の数字（電話番号など）';
     return '';
@@ -259,7 +259,8 @@ var PC = (function () {
     if (a.length === 2) return a[0] + 'と' + a[1];
     return a.slice(0, -1).join('、') + 'と' + a[a.length - 1];
   }
-  function namesJa(a) { return a.length <= 3 ? a.join('・') : a.length + 'つのメニュー'; }
+  // 名前を並べる（合わせて40字までなら全部。名前に「・」が入ることがあるので区切りは「、」）。長いときは null
+  function namesJa(a) { var t = a.join('、'); return Array.from(t).length <= 40 ? t : null; }
 
   function emptyState() {
     return { shop: '', title: DEFAULT_TITLE, date: '', rows: [{ name: '', old: '', neu: '' }, { name: '', old: '', neu: '' }, { name: '', old: '', neu: '' }], reasons: [], reasonFree: '', closing: 'keep', diff: true };
@@ -288,9 +289,9 @@ var PC = (function () {
       else if (cpLen(name) > LIM.name) { e.name = 1; errs.push(no + ': メニューの名前は' + LIM.name + '字までです（今' + cpLen(name) + '字）。'); }
       else if ((b = blockedReason(name))) { e.name = 1; errs.push(no + ': メニューの名前に' + b + 'は入れられません。'); }
       if (o === null) { e.old = 1; errs.push(no + ': 今の価格を入れてください。'); }
-      else if (isNaN(o)) { e.old = 1; errs.push(no + ': 今の価格は0〜999,999の整数（円）で入れてください。'); }
+      else if (isNaN(o)) { e.old = 1; errs.push(no + ': 今の価格は、数字だけ（0〜999,999）で入れてください。'); }
       if (w === null) { e.neu = 1; errs.push(no + ': 新しい価格を入れてください。'); }
-      else if (isNaN(w)) { e.neu = 1; errs.push(no + ': 新しい価格は0〜999,999の整数（円）で入れてください。'); }
+      else if (isNaN(w)) { e.neu = 1; errs.push(no + ': 新しい価格は、数字だけ（0〜999,999）で入れてください。'); }
       if (!e.name && !e.old && !e.neu) rows.push({ name: name, old: o, neu: w, d: w - o });
     });
     if (!n) errs.push('メニューを1行以上入れてください。');
@@ -313,22 +314,25 @@ var PC = (function () {
   function texts(m) {
     var kept = m.rows.filter(function (r) { return r.d === 0; }).map(function (r) { return r.name; });
     var down = m.rows.filter(function (r) { return r.d < 0; }).map(function (r) { return r.name; });
+    var up = m.rows.filter(function (r) { return r.d > 0; }).length;
     var partial = kept.length > 0;
-    var why = m.reasons.length ? joinJa(m.reasons) + 'の値上がりが続いているため、' : '';
+    // 値上げが1つもないときは、値上がりの理由と「ご負担」の一文を出さない（値下げなのに詫びる文にしない）
+    var why = (up && m.reasons.length) ? joinJa(m.reasons) + 'の値上がりが続いているため、' : '';
+    var kn = namesJa(kept), dn = namesJa(down);
     var sns = ['【' + m.title + '】',
       'いつも' + m.shop + 'をご利用いただき、ありがとうございます。',
       why + m.dateJa + 'から、' + (partial ? '一部メニューの' : 'メニューの') + '価格を改定いたします。'];
-    if (kept.length) sns.push(namesJa(kept) + 'は据え置きです。');
-    if (down.length) sns.push(namesJa(down) + 'は値下げいたします。');
+    if (kept.length) sns.push(kn ? kn + 'は据え置きです。' : '据え置きのメニューもあります。');
+    if (down.length) sns.push(dn ? dn + 'は値下げいたします。' : '値下げするメニューもあります。');
     sns.push('くわしい価格は画像をご覧ください。');
     if (m.closing === 'keep') sns.push('これからも変わらず、ご満足いただけるよう努めてまいります。', '今後とも' + m.shop + 'をよろしくお願いいたします。');
-    else if (m.closing === 'ask') sns.push('ご理解いただけますと幸いです。', '今後とも' + m.shop + 'をよろしくお願いいたします。');
+    else if (m.closing === 'ask') { if (up) sns.push('ご理解いただけますと幸いです。'); sns.push('今後とも' + m.shop + 'をよろしくお願いいたします。'); }
     var shopTxt = ['平素より' + m.shop + 'をご利用いただき、誠にありがとうございます。',
-      (m.reasons.length ? 'このたび、' + why : 'このたび、') + m.dateJa + 'より、' + (partial ? '一部メニューの' : 'メニューの') + '価格を改定させていただきます。'];
-    if (kept.length) shopTxt.push('なお、' + namesJa(kept) + 'は据え置きといたします。');
-    if (down.length) shopTxt.push(namesJa(down) + 'は値下げいたします。');
+      'このたび、' + why + m.dateJa + 'より、' + (partial ? '一部メニューの' : 'メニューの') + '価格を改定させていただきます。'];
+    if (kept.length) shopTxt.push(kn ? 'なお、' + kn + 'は据え置きといたします。' : 'なお、据え置きのメニューもございます（くわしくは表をご覧ください）。');
+    if (down.length) shopTxt.push(dn ? dn + 'は値下げいたします。' : '値下げするメニューもございます（くわしくは表をご覧ください）。');
     if (m.closing === 'keep') shopTxt.push('これからも変わらずご満足いただけるよう努めてまいりますので、今後ともよろしくお願い申し上げます。');
-    else if (m.closing === 'ask') shopTxt.push('お客さまにはご負担をおかけいたしますが、ご理解いただけますと幸いです。今後ともよろしくお願い申し上げます。');
+    else if (m.closing === 'ask') shopTxt.push(up ? 'お客さまにはご負担をおかけいたしますが、ご理解いただけますと幸いです。今後ともよろしくお願い申し上げます。' : '今後ともよろしくお願い申し上げます。');
     shopTxt.push(m.shop);
     return { sns: sns.join('\n'), shop: shopTxt.join('\n') };
   }
@@ -406,7 +410,8 @@ var PC = (function () {
     var st = PC.loadState(raw);
     if (!st) {
       storeBroken = true;
-      try { localStorage.setItem(PC.KEY + '-backup', raw); } catch (e) { }
+      // 予備に写せなかったら、元の下書きを上書きしない（以後は保存しない）
+      try { localStorage.setItem(PC.KEY + '-backup', raw); } catch (e) { storeOk = false; }
     }
     return st;
   }
@@ -478,9 +483,9 @@ var PC = (function () {
         h('div', { class: 'rh' }, [h('span', { class: 'rn', text: (i + 1) + '行目' }), up, dn, del]),
         h('label', { class: 'f', for: 'rn' + i, text: 'メニューの名前' }), name,
         h('div', { class: 'pr' }, [
-          h('div', null, [h('label', { for: 'ro' + i, text: '今の価格（円）' }), old]),
+          h('div', null, [h('label', { for: 'ro' + i, text: '今（税込・円）' }), old]),
           h('span', { class: 'arr', 'aria-hidden': 'true', text: '→' }),
-          h('div', null, [h('label', { for: 'rw' + i, text: '新しい価格（円）' }), neu])
+          h('div', null, [h('label', { for: 'rw' + i, text: '新しい価格（税込）' }), neu])
         ]), tag
       ]);
       ol.appendChild(li);
@@ -537,15 +542,26 @@ var PC = (function () {
     for (; s > min; s--) { ctx.font = weight + ' ' + s + 'px ' + FONT; if (ctx.measureText(text).width <= maxW) return s; }
     ctx.font = weight + ' ' + min + 'px ' + FONT; return min;
   }
-  // 1行に収まらない名前は2行に分ける（それでも長ければ縮める）
-  function nameLines(ctx, text, size, maxW) {
-    ctx.font = '700 ' + size + 'px ' + FONT;
-    if (ctx.measureText(text).width <= maxW) return [text];
-    // 2行の長さがなるべくそろう位置で分ける（1行目に収まる範囲で、真ん中に近い所）
-    var ch = Array.from(text), half = Math.ceil(ch.length / 2), best = 1;
-    for (var k = 1; k < ch.length; k++) { if (ctx.measureText(ch.slice(0, k).join('')).width <= maxW) best = k; else break; }
-    var cut = Math.min(best, Math.max(half, ch.length - best));
-    return [ch.slice(0, cut).join(''), ch.slice(cut).join('')];
+  // メニュー名の置き方: 1行で入る大きさを探し、小さくなりすぎるなら2行（2行とも同じ大きさ）にする
+  // 分ける位置は「括弧・「・」・「＋」・空白の直前」を優先し、そのうえで2行の幅の差が小さい所
+  function nameFit(ctx, text, size, min, maxW) {
+    var ch = Array.from(text), s, k, one = null;
+    function w(t, sz) { ctx.font = '700 ' + sz + 'px ' + FONT; return ctx.measureText(t).width; }
+    for (s = size; s >= min; s--) if (w(text, s) <= maxW) { one = { lines: [text], size: s }; break; }
+    if (one && (one.size >= Math.floor(size * 0.85) || ch.length < 2)) return one;
+    for (s = Math.min(size, Math.floor(size * 0.85)); s >= min; s--) {
+      var best = null;
+      for (k = 1; k < ch.length; k++) {
+        var a = ch.slice(0, k).join('').replace(/\s+$/, ''), b = ch.slice(k).join('').replace(/^\s+/, '');
+        if (!a || !b) continue;
+        var wa = w(a, s), wb = w(b, s);
+        if (wa > maxW || wb > maxW) continue;
+        var score = Math.abs(wa - wb) - (/^[（(・＋+]/.test(b) || /\s/.test(ch[k] || '') ? s * 8 : 0);
+        if (!best || score < best.score) best = { score: score, lines: [a, b] };
+      }
+      if (best) return (one && one.size >= s) ? one : { lines: best.lines, size: s };
+    }
+    return one || { lines: [text], size: min };
   }
   function draw(cv, m) {
     var ctx = cv.getContext('2d'), W = 1080, H = 1350, L = 80, R = 1000;
@@ -561,16 +577,24 @@ var PC = (function () {
     var lay = PC.imageLayout(m.rows.length), f = lay.font;
     // 列: 名前 | 今の価格 → 新しい価格 | 差額
     // 金額の幅を先に測り、→ が金額に重ならないように列の位置を決める
-    var fo = Math.round(f * 0.82), wNew = 0, wOld = 0, wSt = 0;
-    m.rows.forEach(function (r) {
-      ctx.font = '800 ' + f + 'px ' + FONT; wNew = Math.max(wNew, ctx.measureText(PC.yen(r.neu)).width);
-      ctx.font = '500 ' + fo + 'px ' + FONT; wOld = Math.max(wOld, ctx.measureText(PC.yen(r.old)).width);
-      ctx.font = '700 ' + Math.round(f * 0.72) + 'px ' + FONT; wSt = Math.max(wSt, ctx.measureText(PC.statusText(r, m.diff)).width);
-    });
-    var cStatus = R, cNew = R - Math.max(wSt + 28, 60), gap = Math.round(f * 1.6);
-    var cOld = cNew - wNew - gap, cArrowX = cNew - wNew - gap / 2, nameW = cOld - wOld - L - 24;
-    var y = lay.top;
-    ctx.font = '700 26px ' + FONT; ctx.fillStyle = '#4f616b';
+    // 名前の列に340px以上残るまで、金額と差額の文字を小さくしていく
+    var fo, wNew, wOld, wSt, stW, cStatus = R, cNew, gap, cOld, cArrowX, nameW, hNew;
+    ctx.font = '700 26px ' + FONT; hNew = ctx.measureText('新しい価格').width;
+    for (; ; f--) {
+      fo = Math.round(f * 0.82); wNew = 0; wOld = 0; wSt = 0;
+      m.rows.forEach(function (r) {
+        ctx.font = '800 ' + f + 'px ' + FONT; wNew = Math.max(wNew, ctx.measureText(PC.yen(r.neu)).width);
+        ctx.font = '500 ' + fo + 'px ' + FONT; wOld = Math.max(wOld, ctx.measureText(PC.yen(r.old)).width);
+        ctx.font = '700 ' + Math.round(f * 0.72) + 'px ' + FONT; wSt = Math.max(wSt, ctx.measureText(PC.statusText(r, m.diff)).width);
+      });
+      // 差額の列は260pxまで（超える分は差額の文字を縮める）
+      stW = Math.min(wSt, 260); cNew = R - Math.max(stW + 28, 60); gap = Math.round(f * 1.6);
+      cOld = Math.min(cNew - wNew - gap, cNew - hNew - 24); cArrowX = (cOld + (cNew - wNew)) / 2; nameW = cOld - wOld - L - 24;
+      if (nameW >= 340 || f <= 24) break;
+    }
+    // 行が少ないときは表を上下のまんなか寄りに置く（下に大きな空白を残さない）
+    var tableH = lay.head + lay.rowH * m.rows.length, y = lay.top + Math.max(0, Math.round((800 - tableH) * 0.4));
+    ctx.fillStyle = '#4f616b';
     ctx.textAlign = 'right'; ctx.fillText('今の価格', cOld, y + 44); ctx.fillText('新しい価格', cNew, y + 44);
     ctx.textAlign = 'left'; ctx.fillText('メニュー', L, y + 44);
     ctx.fillStyle = '#2f4a5a'; ctx.fillRect(L, y + lay.head - 8, R - L, 3);
@@ -578,15 +602,11 @@ var PC = (function () {
     m.rows.forEach(function (r, i) {
       var mid = y + lay.rowH / 2;
       if (i % 2 === 1) { ctx.fillStyle = '#f1f5f7'; ctx.fillRect(L - 12, y, R - L + 24, lay.rowH); }
-      var lines = nameLines(ctx, r.name, f, nameW), fs = f;
-      if (lines.length === 2) { fs = Math.max(22, Math.floor(f * 0.8)); lines = nameLines(ctx, r.name, fs, nameW); if (lines.length === 2 && lines[1]) { ctx.font = '700 ' + fs + 'px ' + FONT; } }
-      ctx.fillStyle = '#17242c'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      if (lines.length === 1) { fitFont(ctx, lines[0], '700', fs, 20, nameW); ctx.fillText(lines[0], L, mid); }
-      else {
-        var lh = fs * 1.15;
-        fitFont(ctx, lines[0], '700', fs, 18, nameW); ctx.fillText(lines[0], L, mid - lh / 2);
-        fitFont(ctx, lines[1], '700', fs, 18, nameW); ctx.fillText(lines[1], L, mid + lh / 2);
-      }
+      var nf = nameFit(ctx, r.name, f, 16, nameW), fs = nf.size;
+      ctx.fillStyle = '#17242c'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.font = '700 ' + fs + 'px ' + FONT;
+      // 最大幅を必ず渡す（万一入りきらなくても、隣の列に重ねない）
+      if (nf.lines.length === 1) ctx.fillText(nf.lines[0], L, mid, nameW);
+      else { var lh = fs * 1.15; ctx.fillText(nf.lines[0], L, mid - lh / 2, nameW); ctx.fillText(nf.lines[1], L, mid + lh / 2, nameW); }
       ctx.textAlign = 'right';
       ctx.fillStyle = '#5c6870'; ctx.font = '500 ' + fo + 'px ' + FONT; ctx.fillText(PC.yen(r.old), cOld, mid);
       ctx.textAlign = 'center'; ctx.fillStyle = '#8a9aa3'; ctx.font = '700 ' + Math.round(f * 0.8) + 'px ' + FONT; ctx.fillText('→', cArrowX, mid);
@@ -594,7 +614,7 @@ var PC = (function () {
       var st = PC.statusText(r, m.diff);
       if (st) {
         ctx.fillStyle = r.d === 0 ? '#4f616b' : '#2f4a5a';
-        ctx.font = '700 ' + Math.round(f * 0.72) + 'px ' + FONT; ctx.fillText(st, cStatus, mid);
+        fitFont(ctx, st, '700', Math.round(f * 0.72), 14, stW); ctx.fillText(st, cStatus, mid, stW);
       }
       ctx.fillStyle = '#d6dee2'; ctx.fillRect(L, y + lay.rowH - 1, R - L, 1);
       y += lay.rowH;
@@ -697,7 +717,7 @@ var PC = (function () {
       return;
     }
     var a = document.createElement('a');
-    if (!('download' in a)) { showLongPress('このブラウザでは自動の保存ができません。'); return; }
+    if (!('download' in a)) { showLongPress('このブラウザではそのまま保存できません。'); return; }
     a.href = dataUrl(); a.download = name;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     msg.textContent = 'ダウンロードを試しました（' + name + '）。保存されないときは「画像を表示して保存」を使ってください（LINEなどアプリ内のブラウザでは保存できないことがあります）。';
@@ -747,6 +767,8 @@ var PC = (function () {
     document.body.classList.add('printing');
     window.print();
   });
+  // ブラウザのメニューや Ctrl+P から印刷しても、張り紙だけが出るようにする
+  window.addEventListener('beforeprint', function () { if (current) document.body.classList.add('printing'); });
   window.addEventListener('afterprint', function () { document.body.classList.remove('printing'); });
 
   /* ---- 別のタブで下書きが変わったら読み直す ---- */
