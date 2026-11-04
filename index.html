@@ -29,7 +29,9 @@
   h3 { font-size: 16px; line-height: 1.4; margin: 0 0 8px; }
   p { margin: 0 0 10px; }
   .lead { color: var(--ink2); }
-  .small { font-size: 14px; color: var(--ink3); }
+  .small { font-size: 16px; color: var(--ink3); }
+  .cnt { font-size: 14px; color: var(--ink3); margin: -6px 0 8px; min-height: 0; }
+  .cnt:empty { display: none; }
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; min-width: 0; }
   label.f, .f { display: block; font-weight: 600; margin: 0 0 4px; }
   .hint { font-weight: 400; color: var(--ink3); font-size: 14px; }
@@ -46,9 +48,9 @@
   .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
   .errors { border: 2px solid var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 10px 12px; margin: 0 0 12px; color: var(--ink); }
   .errors ul { margin: 4px 0 0; padding-left: 1.2em; }
-  .warnmsg { border: 1px solid var(--line-strong); border-left: 6px solid var(--accent); background: var(--notice); border-radius: 6px; padding: 8px 10px; font-size: 14px; color: var(--ink2); margin: -4px 0 10px; }
+  .warnmsg { border: 1px solid var(--line-strong); border-left: 6px solid var(--accent); background: var(--notice); border-radius: 6px; padding: 8px 10px; font-size: 16px; color: var(--ink2); margin: -4px 0 10px; }
   .okmsg { color: var(--ink2); font-weight: 600; font-size: 15px; }
-  .notice { background: var(--notice); border: 1px solid var(--line-strong); border-left: 6px solid var(--accent); border-radius: 6px; padding: 10px 12px; margin: 0 0 14px; font-size: 14px; color: var(--ink2); }
+  .notice { background: var(--notice); border: 1px solid var(--line-strong); border-left: 6px solid var(--accent); border-radius: 6px; padding: 10px 12px; margin: 0 0 14px; font-size: 16px; color: var(--ink2); }
   .notice p:last-child { margin: 0; }
   .danger-btn { color: var(--danger); border-color: var(--danger); }
   /* メニューの行 */
@@ -56,11 +58,11 @@
   .row { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 2px; background: var(--surface); }
   .row .rh { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
   .row .rh .rn { font-weight: 700; color: var(--ink3); font-size: 14px; flex: 1; }
-  .row .rh button { min-width: 44px; padding: 4px 8px; font-size: 14px; }
+  .row .rh button { min-width: 44px; padding: 4px 8px; font-size: 16px; }
   .row .pr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: end; }
   .row .pr .arr { padding: 0 0 18px; font-weight: 800; color: var(--ink3); }
-  .row .pr label { font-size: 13px; font-weight: 700; color: var(--ink3); display: block; margin: 0 0 2px; }
-  .row .tag { font-size: 13px; font-weight: 800; color: var(--accent); margin: -4px 0 6px; min-height: 1em; }
+  .row .pr label { font-size: 14px; font-weight: 700; color: var(--ink3); display: block; margin: 0 0 2px; }
+  .row .tag { font-size: 14px; font-weight: 800; color: var(--accent); margin: -4px 0 6px; min-height: 1em; }
   /* 選択肢 */
   .choice { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); cursor: pointer; margin: 0 0 6px; }
   .choice input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--accent); }
@@ -127,9 +129,11 @@
       <div class="btns"><button type="button" id="sampleA">見本を入れる（美容室）</button><button type="button" id="sampleB">見本を入れる（飲食店）</button></div>
       <div id="confirmBox" class="confirm" hidden></div>
       <label class="f" for="shop">お店の名前 <span class="hint">（20字まで）</span></label>
-      <input type="text" id="shop" maxlength="40" autocomplete="off">
+      <input type="text" id="shop" maxlength="40" autocomplete="off" aria-describedby="cnt-shop">
+      <p class="cnt" id="cnt-shop"></p>
       <label class="f" for="title">見出し <span class="hint">（20字まで）</span></label>
-      <input type="text" id="title" maxlength="40" autocomplete="off">
+      <input type="text" id="title" maxlength="40" autocomplete="off" aria-describedby="cnt-title">
+      <p class="cnt" id="cnt-title"></p>
       <label class="f" for="date">新しい価格にする日</label>
       <input type="date" id="date">
       <div id="dateWarn" class="warnmsg" hidden></div>
@@ -434,6 +438,7 @@ var PC = (function () {
     var el = $(id); el.value = state[key];
     el.addEventListener('input', function () { state[key] = el.value; update(); });
   }
+  function countText(v, max) { var n = Array.from(PC.clean(v)).length; return n ? n + ' / ' + max + '字' + (n > max ? '（多すぎます）' : '') : ''; }
   bindText('shop', 'shop'); bindText('title', 'title'); bindText('date', 'date'); bindText('reasonFree', 'reasonFree');
 
   function choiceEl(type, name, value, label, checked, onchange) {
@@ -517,10 +522,10 @@ var PC = (function () {
     box.appendChild(h('p', { text: text })); box.appendChild(h('div', { class: 'btns' }, [ok, no]));
     box.hidden = false; ok.focus();
   }
-  function setAll(st) {
+  function setAll(st, noSave) {
     state = st;
     ['shop', 'title', 'date', 'reasonFree'].forEach(function (k) { $(k).value = state[k]; });
-    renderChoices(); renderRows(); update();
+    renderChoices(); renderRows(); update(noSave === true);
   }
   function useSample(key) {
     var s = SAMPLES[key];
@@ -662,8 +667,12 @@ var PC = (function () {
       var e = v.rowErr[i] || {};
       re.name.classList.toggle('bad', !!e.name); re.old.classList.toggle('bad', !!e.old); re.neu.classList.toggle('bad', !!e.neu);
       var o = PC.parsePrice(state.rows[i].old), w = PC.parsePrice(state.rows[i].neu);
-      re.tag.textContent = (o != null && w != null && !isNaN(o) && !isNaN(w)) ? (w === o ? '据え置き' : w > o ? '＋' + PC.yen(w - o) : '値下げ −' + PC.yen(o - w)) : '';
+      var tg = (o != null && w != null && !isNaN(o) && !isNaN(w)) ? (w === o ? '据え置き' : w > o ? '＋' + PC.yen(w - o) : '値下げ −' + PC.yen(o - w)) : '';
+      var cn = countText(state.rows[i].name, PC.LIM.name);
+      re.tag.textContent = [tg, cn ? '名前 ' + cn : ''].filter(Boolean).join('　');
     });
+    $('cnt-shop').textContent = countText(state.shop, PC.LIM.shop);
+    $('cnt-title').textContent = countText(state.title, PC.LIM.title);
     var dw = $('dateWarn'); dw.textContent = v.warn; dw.hidden = !v.warn;
     var box = $('errBox'), started = hasInput();
     box.textContent = '';
@@ -774,7 +783,8 @@ var PC = (function () {
   /* ---- 別のタブで下書きが変わったら読み直す ---- */
   window.addEventListener('storage', function (e) {
     if (e.key !== PC.KEY || e.newValue == null) return;
-    var st = PC.loadState(e.newValue); if (st) setAll(st);
+    if (e.newValue === PC.dumpState(state)) return;
+    var st = PC.loadState(e.newValue); if (st) setAll(st, true);
   });
 
   renderChoices(); renderRows(); noteStore(); update(true);
